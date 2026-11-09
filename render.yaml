@@ -1,0 +1,57 @@
+# render.yaml
+# Free-Tier Infrastructure as Code for deploying ARIES to Render (Blueprint).
+# Compatible with Render's 100% Free Tier (No credit card / payment required).
+
+services:
+  # ------------------------------------------------------------
+  # Backend API Service (FastAPI) — Free Instance
+  # ------------------------------------------------------------
+  - type: web
+    name: aries-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: ARIES_ENV
+        value: production
+      - key: ARIES_LLM_PROVIDER
+        value: groq
+      - key: ARIES_GROQ_MODEL
+        value: "openai/gpt-oss-120b"
+      # Ephemeral SQLite storage for free-tier testing.
+      # NOTE: Free tier instances spin down after 15 min of inactivity, so local SQLite
+      # data will reset on spin-down or redeploy. For persistent data on the free tier,
+      # provision a free PostgreSQL database (e.g. Render Postgres, Neon, Supabase)
+      # and supply the connection string via DATABASE_URL in the Render dashboard.
+      - key: ARIES_DATABASE_URL
+        value: sqlite+aiosqlite:///./aries.db
+      - key: ARIES_CORS_ORIGINS
+        value: "https://aries-frontend.onrender.com"
+      - key: GROQ_API_KEY
+        sync: false # Set securely in the Render dashboard
+      - key: OPENAI_API_KEY
+        sync: false # Optional: set only if using OpenAI provider
+
+  # ------------------------------------------------------------
+  # Frontend Static Site (React/Vite) — Always Free on Render
+  # ------------------------------------------------------------
+  - type: web
+    name: aries-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: "https://aries-backend-8ydf.onrender.com/api/v1"
+    
+    # SPA rewrite rule so direct route links (/interview/:id, /report/:id) serve index.html
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
